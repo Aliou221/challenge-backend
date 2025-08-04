@@ -1,41 +1,29 @@
-FROM php:8.2-fpm
+# Étape 1 : Choisir une image PHP avec Composer + extensions Laravel
+FROM php:8.2-cli
 
 # Installer dépendances système
 RUN apt-get update && apt-get install -y \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    unzip \
-    curl \
-    git \
-    libzip-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    libssl-dev \
-    libcurl4-openssl-dev \
-    default-mysql-client \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo pdo_mysql mbstring zip gd
+    git unzip zip curl libzip-dev libpng-dev libonig-dev libxml2-dev \
+    && docker-php-ext-install pdo pdo_mysql zip
 
-# Copier Composer depuis l'image officielle
+# Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Définir le dossier de travail
-WORKDIR /var/www
+# Créer le répertoire de l'application
+WORKDIR /var/www/html
 
-# Copier les fichiers Laravel
+# Copier tous les fichiers du projet dans l'image
 COPY . .
 
-# Installer les dépendances Laravel
-RUN composer install --no-dev --optimize-autoloader
+# Installer les dépendances PHP via Composer
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader
 
-
-# Créer un fichier .env depuis les variables Railway
+# Générer le fichier .env à partir des variables d'environnement Railway
 RUN echo "APP_NAME=${APP_NAME}" > .env \
  && echo "APP_ENV=${APP_ENV}" >> .env \
  && echo "APP_DEBUG=${APP_DEBUG}" >> .env \
  && echo "APP_URL=${APP_URL}" >> .env \
+ && echo "LOG_CHANNEL=stack" >> .env \
  && echo "DB_CONNECTION=${DB_CONNECTION}" >> .env \
  && echo "DB_HOST=${DB_HOST}" >> .env \
  && echo "DB_PORT=${DB_PORT}" >> .env \
@@ -43,16 +31,13 @@ RUN echo "APP_NAME=${APP_NAME}" > .env \
  && echo "DB_USERNAME=${DB_USERNAME}" >> .env \
  && echo "DB_PASSWORD=${DB_PASSWORD}" >> .env
 
+# Donner les bons droits au framework
+RUN chmod -R 775 storage bootstrap/cache
 
-# Générer le cache de configuration
-RUN php artisan config:clear \
-    && php artisan route:clear \
-    && php artisan view:clear
-
-# Exposer le port par défaut Laravel
+# Exposer le port 8000 pour Railway
 EXPOSE 8000
 
-# Commande au démarrage du conteneur
+# Commande finale de lancement
 CMD php artisan key:generate --force \
-    && php artisan migrate --force \
-    && php artisan serve --host=0.0.0.0 --port=8000
+ && php artisan migrate --force \
+ && php artisan serve --host=0.0.0.0 --port=8000
